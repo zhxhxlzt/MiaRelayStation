@@ -46,13 +46,30 @@ caddy_data/
 caddy_config/
 
 # --- Windows native deployment build outputs ---
-# Binaries fetched or built locally (PyInstaller exe, caddy.exe, winsw.exe)
-windows/dist/
-# Transient PyInstaller venv used by build-relay.ps1
+# NOTE: the top-level `build/` and `dist/` rules above are aimed at
+# Python sdist/wheel/PyInstaller outputs. For the Windows native
+# deployment we WANT the following committed so that operators can
+# `git pull` on a fresh Windows Server and run install.ps1 directly
+# without a separate binary transfer channel. We therefore re-include
+# them explicitly (order matters: these must sit after the generic
+# build/ and dist/ rules).
+#
+# Keep ignored:
+#   - windows/.build-venv/       PyInstaller throwaway venv (~200MB)
+#   - windows/build/build/       PyInstaller intermediate work dir
+#   - windows/build/dist/        PyInstaller intermediate onefile dir
 windows/.build-venv/
-# Packaged release zips (final artifacts handed to ops)
-windows/release/*.zip
-# Re-include the Windows build scripts folder (the top-level `build/`
-# rule above is meant for Python sdist/wheel outputs, not these sources).
+
+# Re-include the Windows deployment source + shipped binaries.
 !windows/build/
 !windows/build/**
+!windows/dist/
+!windows/dist/**
+!windows/release/
+!windows/release/**
+
+# Still ignore PyInstaller intermediate trees that land under
+# windows/build/ when build-relay.ps1 runs (the final exe is moved
+# into windows/dist/ before commit).
+windows/build/build/
+windows/build/dist/
