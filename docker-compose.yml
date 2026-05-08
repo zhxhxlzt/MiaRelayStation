@@ -1,0 +1,50 @@
+# Mia 云中继部署清单（docker compose v2）
+# ----------------------------------------------------------------------------
+# 两个服务：
+#   * relay —— 由同目录 Dockerfile 构建，运行 FastAPI/uvicorn，不直接对公网暴露端口。
+#   * caddy —— 反向代理 + 自动 ACME，仅它发布 80/443。
+# 一条共享网络 mia-net；Caddy 的证书与状态用命名卷持久化，升级不会重新签发。
+# 启动：先在本目录准备好 .env（MIA_AUTH_TOKENS 与 MIA_DOMAIN），然后 docker compose up -d。
+# ----------------------------------------------------------------------------
+
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mia-relay:local
+    container_name: mia-relay
+    restart: unless-stopped
+    env_file:
+      - .env
+    # 只在内部网络里暴露 8000，**不 publish** 到宿主，公网访问必须经 caddy。
+    expose:
+      - "8000"
+    networks:
+      - mia-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mia-caddy
+    restart: unless-stopped
+    depends_on:
+      - relay
+    env_file:
+      - .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - mia-net
+
+networks:
+  mia-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,28 @@
+# Mia 云中继 Caddy 配置
+# ----------------------------------------------------------------------------
+# 使用 {$MIA_DOMAIN} 作为站点名；Caddy 自带 ACME 客户端会向 Let's Encrypt
+# 自动申请 / 续期证书（前提：DNS 的 A/AAAA 记录已指向本机，80/443 可达）。
+#
+# 所有 HTTP/HTTPS 请求（含 WebSocket 升级）都会反向代理到 mia-net 内部的
+# relay:8000 服务。不声明任何手工证书路径。
+# ----------------------------------------------------------------------------
+
+{$MIA_DOMAIN} {
+    encode gzip
+
+    # 反向代理所有路径到内部 relay 服务。
+    # caddy 的 reverse_proxy 原生支持 HTTP/1.1 Upgrade 语义，会把 WebSocket
+    # 握手透明转发给上游，无需额外显式配置。
+    reverse_proxy relay:8000 {
+        # 为 relay 暴露客户端真实地址，便于后续日志排查。
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
+    }
+
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
