@@ -4,8 +4,9 @@
   Build Mia Cloud Relay as a single-file Windows executable via PyInstaller.
 
 .DESCRIPTION
-  Intended to run on the developer's local Windows 11 machine with Python 3.12
-  already installed and on PATH. Produces `cloud/windows/dist/mia-relay.exe`.
+  Intended to run on Windows 11 (dev) or Windows Server 2019+ (server-side
+  build) with Python 3.11+ already installed and on PATH. Produces
+  `cloud/windows/dist/mia-relay.exe`.
 
   Idempotent:
     * Re-creates the build venv only if missing or if -Clean is passed.
@@ -50,7 +51,7 @@ Write-Host "    Output dir   : $DistDir"
 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    throw "Python not found on PATH. Install Python 3.12+ and re-run."
+    throw "Python not found on PATH. Install Python 3.11+ and re-run."
 }
 
 $pyVersion = & python --version 2>&1

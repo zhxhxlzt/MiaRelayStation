@@ -94,7 +94,7 @@ Copy-Many -SrcDir (Join-Path $WindowsRoot 'config') -Files @(
 $dstScripts = Join-Path $stagingDir 'scripts'
 New-Item -ItemType Directory -Force -Path $dstScripts | Out-Null
 Copy-Many -SrcDir (Join-Path $WindowsRoot 'scripts') -Files @(
-    'common.ps1','install.ps1','upgrade.ps1','uninstall.ps1','status.ps1'
+    'common.ps1','install.ps1','upgrade.ps1','uninstall.ps1','status.ps1','apply-release.ps1','build-on-server.ps1'
 ) -DstDir $dstScripts
 
 Copy-Item -Force -LiteralPath (Join-Path $WindowsRoot 'README.md') -Destination (Join-Path $stagingDir 'README.md')

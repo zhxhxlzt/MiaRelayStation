@@ -146,7 +146,142 @@ curl https://<MIA_DOMAIN>/health
 
 ---
 
-## 升级
+## 一键发布（推荐日常升级路径）
+
+两条平行路径，按场景二选一：
+
+| 路径 | 何时用 | 网络流量 | server 依赖 |
+|---|---|---|---|
+| **A. 源码构建（推荐）** | server 能访问 PyPI + Git | ~KB 级（只推源码） | Python 3.11+、git |
+| **B. zip 传输（回退）** | server 离线/无 PyPI | ~20 MB zip 过 scp | 仅 git（可选） |
+
+两条路径由同一入口 `publish-local.ps1` 选择：加 `-BuildOnServer` 走 A，否则走 B。
+
+### 前置条件
+
+- 本机（Win11）：Git for Windows、OpenSSH 客户端（Win10/11 默认已装）在 PATH。**路径 A 不要求本机装 Python**；路径 B 需要本机跑过一次 `build-relay.ps1`。
+- 服务端（Windows Server）：
+  - 已按上述"首次部署"章节完成一次 `install.ps1`，两服务在 `Running`。
+  - 仓库已 clone 到 `C:\Deploy\cloud`（或其他路径，可通过参数指定）。
+  - OpenSSH Server 已启用并放行 22 端口，登录账户具备本机管理员权限。
+  - **路径 A 额外要求**：server 上装 Python 3.11+、git 在 PATH、出口可访问 PyPI。
+
+### 路径 A：源码构建（本机一条命令）
+
+```powershell
+cd D:\Mia
+.\cloud\windows\build\publish-local.ps1 -SshTarget Administrator@<server-ip> -BuildOnServer
+```
+
+脚本会：
+
+1. `git add cloud/windows/` → `git commit` → `git push`（`-BuildOnServer` 模式下 git push 强制开启，因为 server 要从 origin 拉）
+2. `ssh` 远程触发 `scripts\build-on-server.ps1`，在 server 上顺序执行：
+   - `git -C C:\Deploy\cloud pull --ff-only`（working tree 脏则跳过）
+   - `build-relay.ps1`（产出 `C:\Deploy\cloud\cloud\windows\dist\mia-relay.exe`；首次 3–5 分钟，后续 <60 秒）
+   - `upgrade.ps1`（停服 → 换 exe → 启服 → `/health` 探测）
+   - `status.ps1`（打印快照）
+
+常用开关：
+
+```powershell
+# 升级时顺便升级 caddy.exe：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -BuildOnServer -IncludeCaddy
+
+# 顺便刷新 Caddyfile.windows：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -BuildOnServer -IncludeCaddyfile
+
+# 彻底清干净 server 端构建缓存重来（依赖漂移时）：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -BuildOnServer -Clean
+
+# 指定 SSH 私钥：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -BuildOnServer -SshKey C:\Users\me\.ssh\id_ed25519
+```
+
+如需手工在 server 上跑（不经本机 SSH 触发）：
+
+```powershell
+# 在 server 上管理员 PowerShell：
+cd C:\Deploy\cloud\cloud\windows
+.\scripts\build-on-server.ps1
+```
+
+### 路径 B：zip 传输（本机一条命令）
+
+```powershell
+cd D:\Mia
+.\cloud\windows\build\publish-local.ps1 -SshTarget Administrator@<server-ip>
+```
+
+脚本会：
+
+1. 调 `build-relay.ps1` 重打 `mia-relay.exe`（`-SkipBuild` 可跳过）
+2. 调 `release.ps1` 生成 `mia-relay-windows-<sha>.zip`
+3. `git add cloud/windows/` → `git commit` → `git push`（`-SkipGitPush` 可跳过）
+4. `scp` zip 到 `<server>:C:/Temp/mia-release/`
+5. `ssh` 远程触发 `scripts\apply-release.ps1`（`-SkipRemoteApply` 可只传 zip、不触发升级）
+
+常用开关：
+
+```powershell
+# 只改脚本/配置，不重建 exe（快得多）：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -SkipBuild
+
+# 顺便升级 Caddy 可执行文件：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -IncludeCaddy
+
+# 顺便刷新 Caddyfile.windows（路由变更）：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -IncludeCaddyfile
+
+# 使用指定 SSH 私钥：
+.\publish-local.ps1 -SshTarget Administrator@<ip> -SshKey C:\Users\me\.ssh\id_ed25519
+
+# 只出 zip，不推、不升级（冒烟 / 离线环境）：
+.\publish-local.ps1 -SkipShip
+```
+
+服务端 `apply-release.ps1` 被远程触发时等同于：
+
+1. `git -C C:\Deploy\cloud pull --ff-only`（working tree 脏则跳过，避免覆盖本地改动）
+2. `Expand-Archive <zip>` → `%TEMP%\mia-release\<zip-base>\`
+3. 把解压出来的 `mia-relay.exe` / `caddy.exe` / `winsw.exe` 复制到 `C:\Deploy\cloud\cloud\windows\dist\`
+4. 调 `scripts\upgrade.ps1`（`-IncludeCaddy` / `-IncludeCaddyfile` 开关透传）
+5. 调 `scripts\status.ps1` 打印快照
+
+也可在 server 上手工跑：
+
+```powershell
+cd C:\Deploy\cloud\cloud\windows
+.\scripts\apply-release.ps1 -ZipPath C:\Temp\mia-release\mia-relay-windows-abc1234.zip
+```
+
+### SSH 登录准备
+
+一次性在 server 上启用 OpenSSH Server（管理员 PowerShell）：
+
+```powershell
+# 安装 & 启动 OpenSSH Server
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' `
+  -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+```
+
+本机把公钥放到 server：
+
+```powershell
+# server 端（以 Administrator 登录）：
+#   $keys = 'C:\ProgramData\ssh\administrators_authorized_keys'
+#   把本机 ~/.ssh/id_ed25519.pub 内容追加到 $keys
+#   并把该文件 ACL 收到 SYSTEM + Administrators 可读（下面一行完成）：
+icacls 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'SYSTEM:F' /grant 'BUILTIN\Administrators:F'
+Restart-Service sshd
+```
+
+---
+
+## 升级（手工路径 / 离线环境）
 
 在本机 Win11 重新走构建三步，得到新 zip；拷到目标机解压覆盖（或解到新目录），然后：
 
