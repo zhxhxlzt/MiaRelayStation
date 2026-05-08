@@ -134,15 +134,21 @@ Set-MiaFirewallRules
 
 # ---- Step 10: install & start services -------------------------------------
 Write-Host "==> Installing services via WinSW" -ForegroundColor Cyan
-& $relayWrapper install  | Out-Host
-if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 0x424) {
-    # WinSW returns non-zero if the service already exists with changes; refresh.
-    & $relayWrapper refresh | Out-Host
+
+# Helper: ensure service is installed (uninstall first if already registered).
+function Install-WinswService {
+    param([string]$WrapperExe, [string]$ServiceName)
+    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($svc) {
+        Write-Host "    Service $ServiceName already registered; re-installing..." -ForegroundColor Yellow
+        Stop-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        & $WrapperExe uninstall | Out-Host
+    }
+    & $WrapperExe install | Out-Host
 }
-& $caddyWrapper install  | Out-Host
-if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 0x424) {
-    & $caddyWrapper refresh | Out-Host
-}
+
+Install-WinswService -WrapperExe $relayWrapper -ServiceName $script:MiaRelayService
+Install-WinswService -WrapperExe $caddyWrapper -ServiceName $script:MiaCaddyService
 
 Write-Host "==> Starting services" -ForegroundColor Cyan
 Start-Service -Name $script:MiaRelayService

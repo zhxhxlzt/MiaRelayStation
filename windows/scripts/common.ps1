@@ -133,10 +133,11 @@ function Set-MiaFirewallRules {
         $existing = Get-NetFirewallRule -DisplayName $r.Name -ErrorAction SilentlyContinue
         if ($existing) {
             # Re-assert params in case someone tweaked them manually.
+            # Note: Set-NetFirewallPortFilter -AssociatedNetFirewallRule is not supported
+            # on all Windows versions; use Remove+New to update port if needed.
             Set-NetFirewallRule -DisplayName $r.Name `
-                -Direction Inbound -Action $r.Action -Protocol TCP -Enabled True | Out-Null
-            Set-NetFirewallPortFilter -AssociatedNetFirewallRule $existing `
-                -Protocol TCP -LocalPort $r.Port | Out-Null
+                -Direction Inbound -Action $r.Action -Protocol TCP `
+                -LocalPort $r.Port -Enabled True | Out-Null
         } else {
             New-NetFirewallRule -DisplayName $r.Name `
                 -Description $r.Desc `

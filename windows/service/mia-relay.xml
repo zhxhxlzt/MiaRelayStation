@@ -10,10 +10,10 @@
   into the process environment without committing the token to xml.
 
   File layout on the target machine (created by install.ps1):
-    C:\Program Files\Mia\bin\mia-relay-launcher.cmd     <-- entry point
-    C:\Program Files\Mia\mia-relay.exe                  <-- PyInstaller onefile
-    C:\ProgramData\Mia\config\.env                       <-- secrets (ACL'd)
-    C:\ProgramData\Mia\logs\relay\                       <-- rolling logs
+    C:\Program Files\Mia\bin\mia-relay-launcher.cmd     (entry point)
+    C:\Program Files\Mia\mia-relay.exe                  (PyInstaller onefile)
+    C:\ProgramData\Mia\config\.env                       (secrets, ACL'd)
+    C:\ProgramData\Mia\logs\relay\                       (rolling logs)
 -->
 <service>
   <id>MiaRelay</id>
