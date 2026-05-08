@@ -1,0 +1,61 @@
+<!--
+  WinSW v3 service definition for the Mia Cloud Relay process.
+
+  Service name is "MiaRelay"; the Windows Services console will show
+  "Mia Cloud Relay" and the description below.
+
+  The service does NOT invoke mia-relay.exe directly. It invokes a thin
+  launcher .cmd which (a) cd's into the secrets directory so python-dotenv
+  picks up .env from the conventional cwd, and (b) injects MIA_AUTH_TOKENS
+  into the process environment without committing the token to xml.
+
+  File layout on the target machine (created by install.ps1):
+    C:\Program Files\Mia\bin\mia-relay-launcher.cmd     <-- entry point
+    C:\Program Files\Mia\mia-relay.exe                  <-- PyInstaller onefile
+    C:\ProgramData\Mia\config\.env                       <-- secrets (ACL'd)
+    C:\ProgramData\Mia\logs\relay\                       <-- rolling logs
+-->
+<service>
+  <id>MiaRelay</id>
+  <name>Mia Cloud Relay</name>
+  <description>FastAPI + uvicorn WebSocket relay between phone and PC Agent. See openspec/changes/add-windows-relay-deployment.</description>
+
+  <!-- Launcher shim lives alongside the xml in "C:\Program Files\Mia\bin\". -->
+  <executable>%BASE%\bin\mia-relay-launcher.cmd</executable>
+  <workingdirectory>C:\ProgramData\Mia\config</workingdirectory>
+
+  <!-- LocalSystem can bind 127.0.0.1:8000, read ProgramData\Mia, write logs.
+       See design.md Decision 7 for the "why not a least-priv vSA" trade-off. -->
+  <serviceaccount>
+    <username>LocalSystem</username>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+
+  <startmode>Automatic</startmode>
+
+  <!-- Cold-start budget for PyInstaller onefile extract + Defender scan +
+       uvicorn startup. design.md Risk #1. -->
+  <startTimeout>60 sec</startTimeout>
+  <stopTimeout>15 sec</stopTimeout>
+
+  <!-- Restart strategy: crash-loop safety with backoff -> eventual give-up.
+       Matches the 5s / 10s / None plan in design.md Decision 1. -->
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="none"/>
+  <resetfailure>1 hour</resetfailure>
+
+  <!-- Log file policy: stdout+stderr merged, size-based roll, keep 7 generations.
+       WinSW itself handles rotation so we don't need a logging agent. -->
+  <log mode="roll-by-size">
+    <logpath>C:\ProgramData\Mia\logs\relay</logpath>
+    <sizeThreshold>10240</sizeThreshold><!-- KB, i.e. ~10 MB -->
+    <keepFiles>7</keepFiles>
+  </log>
+
+  <!-- Tell uvicorn where to listen. MIA_AUTH_TOKENS is NOT set here; the
+       launcher script loads it from .env. Keeps secrets out of the xml. -->
+  <env name="MIA_RELAY_HOST" value="127.0.0.1"/>
+  <env name="MIA_RELAY_PORT" value="8000"/>
+  <env name="PYTHONUTF8"     value="1"/>
+</service>

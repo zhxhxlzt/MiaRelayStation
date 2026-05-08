@@ -1,0 +1,39 @@
+# Mia Cloud Relay · Caddy configuration (Windows native deployment)
+# -----------------------------------------------------------------------------
+# Sibling of ./Caddyfile in cloud/. Differs only in the reverse_proxy target
+# because the Windows path has no docker service-name DNS: the relay listens
+# on 127.0.0.1:8000 as a sibling process instead of behind a docker network.
+#
+# {$MIA_DOMAIN} is injected by mia-caddy-launcher.cmd from
+# C:\ProgramData\Mia\config\.env. Caddy's built-in ACME client handles
+# Let's Encrypt cert issuance and renewal; no manual cert path is referenced.
+#
+# Prereqs for ACME to succeed:
+#   * DNS A/AAAA record for {$MIA_DOMAIN} points at this Windows Server's public IP
+#   * Inbound 80/443 reachable (install.ps1 creates the firewall rules)
+# -----------------------------------------------------------------------------
+
+{$MIA_DOMAIN} {
+    encode gzip
+
+    # Reverse proxy to the sibling relay process on loopback.
+    # Caddy's reverse_proxy natively handles HTTP/1.1 Upgrade, so WebSocket
+    # traffic (/ws/phone, /ws/agent) is transparently forwarded — no extra
+    # directive required.
+    reverse_proxy 127.0.0.1:8000 {
+        header_up X-Real-IP {http.request.remote.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
+    }
+
+    # File-based access log, rolled by Caddy itself. WinSW's <log> handles
+    # stdout/stderr (the admin/event channel); this block is the access log.
+    log {
+        output file "C:/ProgramData/Mia/logs/caddy/access.log" {
+            roll_size 10MiB
+            roll_keep 7
+        }
+        format console
+        level  INFO
+    }
+}

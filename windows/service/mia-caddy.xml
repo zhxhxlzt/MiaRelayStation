@@ -1,0 +1,51 @@
+<!--
+  WinSW v3 service definition for Caddy (reverse proxy + ACME).
+
+  Depends on MiaRelay: Windows will start MiaRelay first so Caddy's upstream
+  127.0.0.1:8000 is ready by the time Caddy binds :443. Not strictly required
+  (Caddy tolerates unavailable upstream), but it makes boot-time traces
+  cleaner.
+
+  The launcher injects MIA_DOMAIN from .env and pins Caddy's data directory
+  to ProgramData (not the SYSTEM user profile) so ACME certificates survive
+  upgrades.
+-->
+<service>
+  <id>MiaCaddy</id>
+  <name>Mia Caddy</name>
+  <description>Caddy for Windows: TLS termination + ACME + reverse proxy to 127.0.0.1:8000. See openspec/changes/add-windows-relay-deployment.</description>
+
+  <executable>%BASE%\bin\mia-caddy-launcher.cmd</executable>
+  <workingdirectory>C:\ProgramData\Mia\config</workingdirectory>
+
+  <serviceaccount>
+    <username>LocalSystem</username>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+
+  <startmode>Automatic</startmode>
+
+  <!-- Caddy starts fast; the budget here is dominated by ACME negotiation on
+       first boot (cold certificate). 60s is conservative. -->
+  <startTimeout>60 sec</startTimeout>
+  <stopTimeout>15 sec</stopTimeout>
+
+  <!-- Start only after MiaRelay is up so the reverse_proxy target is ready. -->
+  <depend>MiaRelay</depend>
+
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="none"/>
+  <resetfailure>1 hour</resetfailure>
+
+  <log mode="roll-by-size">
+    <logpath>C:\ProgramData\Mia\logs\caddy</logpath>
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>7</keepFiles>
+  </log>
+
+  <!-- MIA_DOMAIN is injected by the launcher from .env; it is consumed by
+       Caddyfile.windows via the {$MIA_DOMAIN} placeholder.
+       XDG_DATA_HOME pins Caddy's certificate data under ProgramData -->
+  <env name="XDG_DATA_HOME" value="C:\ProgramData\Mia\caddy"/>
+</service>

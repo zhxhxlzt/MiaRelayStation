@@ -44,3 +44,15 @@ Thumbs.db
 # --- Caddy runtime (if ever run from repo) ---
 caddy_data/
 caddy_config/
+
+# --- Windows native deployment build outputs ---
+# Binaries fetched or built locally (PyInstaller exe, caddy.exe, winsw.exe)
+windows/dist/
+# Transient PyInstaller venv used by build-relay.ps1
+windows/.build-venv/
+# Packaged release zips (final artifacts handed to ops)
+windows/release/*.zip
+# Re-include the Windows build scripts folder (the top-level `build/`
+# rule above is meant for Python sdist/wheel outputs, not these sources).
+!windows/build/
+!windows/build/**

@@ -15,6 +15,19 @@
 
 ---
 
+## 部署路径
+
+支持**两条平行**的部署路径，中继行为完全一致，选哪条看宿主机平台：
+
+| 路径 | 宿主 | 运维栈 | 文档 |
+|---|---|---|---|
+| **Linux / Docker** | 任意装了 Docker Engine + Compose v2 的 Linux 主机 | `docker compose` | 本文档（以下"三步上线"及之后全部内容） |
+| **Windows 原生** | Windows Server 2019 / 2022 / 2025（无 Docker） | Caddy for Windows + WinSW + PyInstaller onefile | [cloud/windows/README.md](./windows/README.md) |
+
+两条路径由不同的 OpenSpec capability 约束：Linux/Docker 的 `relay-deployment`、Windows 的 `relay-deployment-windows`。下面的"三步上线 / 更新流程 / token 轮换 / 运维查看 / 停 清 / 常见问题"**只适用于 Linux/Docker 路径**——Windows 路径请直接看 [cloud/windows/README.md](./windows/README.md)。
+
+---
+
 ## 三步上线（一台干净的 Linux 主机）
 
 前提：
